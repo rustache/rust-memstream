@@ -1,6 +1,7 @@
-#![license = "MIT"]
-#![deny(missing_doc)]
+#![deny(missing_docs)]
 #![deny(warnings)]
+#![allow(unstable)]
+#![allow(deprecated)]
 
 //! A reader + writer stream backed by an in-memory buffer.
 
@@ -12,16 +13,15 @@ use std::io::IoResult;
 /// `MemStream` is a reader + writer stream backed by an in-memory buffer
 pub struct MemStream {
     buf: Vec<u8>,
-    pos: uint    
+    pos: usize
 }
 
-#[deriving(PartialOrd)]
 impl MemStream {
     /// Creates a new `MemStream` which can be read and written to 
     pub fn new() -> MemStream {
         MemStream {
             buf: vec![],
-            pos: 0 
+            pos: 0
         }
     }
     /// Tests whether this stream has read all bytes in its ring buffer
@@ -35,7 +35,7 @@ impl MemStream {
 }
 
 impl Reader for MemStream {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         if self.eof() { return Err(io::standard_error(io::EndOfFile)) }
         let write_len = min(buf.len(), self.buf.len() - self.pos);
         {   
