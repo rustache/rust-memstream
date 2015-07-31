@@ -1,23 +1,20 @@
-#![deny(missing_docs)]
+#![deny(missing_doc)]
 #![deny(warnings)]
-#![allow(unstable)]
-#![allow(deprecated)]
 
 //! A reader + writer stream backed by an in-memory buffer.
 
-use std::io;
-use std::slice;
 use std::cmp::min;
-use std::io::IoResult;
+use std::io::{Result,Read,Write};
 
 /// `MemStream` is a reader + writer stream backed by an in-memory buffer
+#[derive(PartialEq, PartialOrd)]
 pub struct MemStream {
     buf: Vec<u8>,
     pos: usize
 }
 
 impl MemStream {
-    /// Creates a new `MemStream` which can be read and written to 
+    /// Creates a new `MemStream` which can be read and written to
     pub fn new() -> MemStream {
         MemStream {
             buf: vec![],
@@ -27,22 +24,29 @@ impl MemStream {
     /// Tests whether this stream has read all bytes in its ring buffer
     /// If `true`, then this will no longer return bytes from `read`
     pub fn eof(&self) -> bool { self.pos >= self.buf.len() }
-    /// Acquires an immutable reference to the underlying buffer of 
+    /// Acquires an immutable reference to the underlying buffer of
     /// this `MemStream`
-    pub fn as_slice<'a>(&'a self) -> &'a [u8] { self.buf.as_slice() }
+    pub fn as_slice<'a>(&'a self) -> &'a [u8] { &self.buf[..] }
     /// Unwraps this `MemStream`, returning the underlying buffer
     pub fn unwrap(self) -> Vec<u8> { self.buf }
 }
 
-impl Reader for MemStream {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
-        if self.eof() { return Err(io::standard_error(io::EndOfFile)) }
+impl Read for MemStream {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        if self.eof() { return Ok(0) }
         let write_len = min(buf.len(), self.buf.len() - self.pos);
-        {   
-            let input = self.buf.slice(self.pos, self.pos + write_len);
-            let output = buf.slice_mut(0, write_len);
+        {
+            let input = &self.buf[self.pos .. self.pos + write_len];
+            let output = &mut buf[0 .. write_len];
             assert_eq!(input.len(), output.len());
-            slice::bytes::copy_memory(output, input);
+
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    input.as_ptr(),
+                    output.as_mut_ptr(),
+                    input.len()
+                );
+            }
         }
         self.pos += write_len;
         assert!(self.pos <= self.buf.len());
@@ -51,9 +55,15 @@ impl Reader for MemStream {
     }
 }
 
-impl Writer for MemStream {
-    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
-        self.buf.push_all(buf);
+impl Write for MemStream {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        for byte in buf {
+            self.buf.push(*byte);
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> Result<()> {
         Ok(())
     }
 }
